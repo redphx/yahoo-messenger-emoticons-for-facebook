@@ -3,7 +3,7 @@
 // @description Yahoo! Messenger emoticons for Facebook
 // @include     https://*.facebook.com/*
 // @include     https://*.messenger.com/*
-// @version     1.0
+// @version     1.1
 // @namespace   https://ym.codekiem.com
 // @downloadURL https://raw.githubusercontent.com/redphx/yahoo-messenger-emoticons-for-facebook/master/ym-emoticons.user.js
 // @author      redphx
@@ -127,7 +127,8 @@ exports.toString = function(fn) {
  * @return {String}
  */
 exports.tpl = function(name, code) {
-  return '<img height="18" src="https://raw.githubusercontent.com/redphx/yahoo-messenger-emoticons-for-facebook/master/emoticons/' + name + '.gif"/>';
+  var extension = name.indexOf('fb-') === 0 ? '.png' : '.gif';
+  return '<img height="18" src="https://raw.githubusercontent.com/redphx/yahoo-messenger-emoticons-for-facebook/master/emoticons/' + name + extension + '"/>';
 };
 
 exports.define({
@@ -251,7 +252,10 @@ exports.define({
   "141": {"codes": [":(fight)", ":(FIGHT)}"]},
 
   "pirate": {"codes": [":ar!", ":pirate:"]},
-  "transformer": {"codes": ["[..]", ":trans:"]}
+  "transformer": {"codes": ["[..]", ":trans:"]},
+
+  "fb-pacman": {"codes": [":v", ":V"]},
+  "fb-colonthree": {"codes": [":3"]}
 });
 
 }(typeof jQuery != 'undefined' ? jQuery : null,
@@ -268,67 +272,128 @@ exports.define({
   var target,
       observer;
 
-  function facebookProcessNode(node) {
-    var messageNodes = node.querySelectorAll('._5yl5 > span');
-    if (messageNodes.length === 0) {
-      return;
-    }
+  var PageFacebook = {
+    TARGET_ID: 'pagelet_dock',
 
-    for (var i = 0; i < messageNodes.length; i++) {
-      var messageNode = messageNodes[i];
-      messageNode.innerHTML = emoticons.replace(messageNode.textContent);
-    }
-  }
+    attachObserver: function() {
+      var observer = new MutationObserver(function(mutations) {
+        mutations.forEach(function(mutation) {
+          for (var i = 0; i < mutation.addedNodes.length; i++) {
+            PageFacebook.checkElement(mutation.addedNodes[i]);
+          }
+        });
+      });
+      var target = document.getElementById(PageFacebook.TARGET_ID);
+      observer.observe(target, { attributes: false, childList: true, characterData: false, subtree: true });
+    },
 
-  function messengerProcessNode(node) {
-    var messageNodes = node.querySelectorAll('span._3oh-');
-    if (messageNodes.length === 0) {
-      return;
-    }
-
-    for (var i = 0; i < messageNodes.length; i++) {
-      var messageNode = messageNodes[i];
-      if (messageNode.textContent && messageNode.parentNode.nodeName !== 'H2') {
-        if (messageNode.firstElementChild && messageNode.firstElementChild.nodeName === 'SPAN') {
-          messageNode = messageNode.firstElementChild;
-        }
-        messageNode.innerHTML = emoticons.replace(messageNode.textContent);
+    checkElement: function(element) {
+      if (element.nodeType !== 1) {
+        return;
       }
+
+      var classList = element.classList;
+      if (classList.contains('_4tdt') || classList.contains('_5wd4')) {
+        PageFacebook.processElement(element);
+      } else if (element.nodeName === 'SPAN') {
+        if (element.firstElementChild && element.firstElementChild.nodeName === 'SPAN') {
+          PageFacebook.processElement(element);
+        }
+      } else if (element.nodeName === 'DIV') {
+        var childElement = element.firstElementChild;
+        if (childElement && childElement.nodeName === 'SPAN' && childElement.hasAttribute('title')) {
+          PageFacebook.processElement(childElement);
+        }
+      }
+    },
+
+    processElement: function(parentElement) {
+      var elements;
+      if (parentElement.nodeName === 'SPAN') {
+        elements = [parentElement];
+      } else {
+        elements = parentElement.querySelectorAll('._5yl5 > span');
+      }
+
+      for (var i = 0; i < elements.length; i++) {
+        var elm = elements[i];
+        var content = elm.hasAttribute('title') ? elm.title : elm.textContent;
+        var newContent = emoticons.replace(content);
+        if (newContent !== content) {
+          elm.innerHTML = newContent;
+        }
+      }
+    },
+
+    init: function() {
+      PageFacebook.attachObserver();
     }
-  }
+  };
+
+  var PageMessenger = {
+    TARGET_ID: 'u_0_0',
+
+    attachObserver: function() {
+      var observer = new MutationObserver(function(mutations) {
+        mutations.forEach(function(mutation) {
+          for (var i = 0; i < mutation.addedNodes.length; i++) {
+            var node = mutation.addedNodes[i];
+            PageMessenger.checkElement(node);
+          }
+        });
+      });
+      var target = document.getElementById(PageMessenger.TARGET_ID);
+      observer.observe(target, { attributes: false, childList: true, characterData: false, subtree: true });
+    },
+
+    checkElement: function(element) {
+      if (element.nodeType !== 1) {
+        return;
+      }
+
+      var classList = element.classList;
+
+      if (element.nodeName === 'SPAN' && classList.contains('_3oh-')) {
+        PageMessenger.processElement(element);
+      } else if (element.nodeName === 'DIV') {
+        var childElement = element.firstElementChild;
+        if (childElement && childElement.nodeName === 'SPAN' && childElement.hasAttribute('title')) {
+          PageMessenger.processElement(childElement);
+        } else {
+          PageMessenger.processElement(element);
+        }
+      }
+    },
+
+    processElement: function(parentElement) {
+      var elements;
+      if (parentElement.nodeName === 'SPAN') {
+        elements = [parentElement];
+      } else {
+        elements = parentElement.querySelectorAll('span._3oh-');
+      }
+
+      for (var i = 0; i < elements.length; i++) {
+        var elm = elements[i];
+        if (elm.parentNode.nodeName !== 'H2') {
+          var content = elm.hasAttribute('title') ? elm.title : elm.textContent;
+          var newContent = emoticons.replace(content);
+          if (newContent !== content) {
+            elm.innerHTML = newContent;
+          }
+        }
+      }
+    },
+
+    init: function() {
+      PageMessenger.attachObserver();
+    }
+  };
 
   if (window.location.hostname === HOST_FACEBOOK) {
-    observer = new MutationObserver(function(mutations) {
-      mutations.forEach(function(mutation) {
-        for (var i = 0; i < mutation.addedNodes.length; i++) {
-          var newNode = mutation.addedNodes[i];
-          var classList = newNode.classList;
-          if (!classList) {
-            continue;
-          }
-          if (classList.contains('_4tdt') || classList.contains('_5wd4')) {
-            facebookProcessNode(newNode);
-          }
-        }
-      });
-    });
-    target = document.getElementById('pagelet_dock');
-    observer.observe(target, { attributes: false, childList: true, characterData: false, subtree: true });
+    PageFacebook.init();
   } else if (window.location.hostname === HOST_MESSENGER) {
-    observer = new MutationObserver(function(mutations) {
-      mutations.forEach(function(mutation) {
-        for (var i = 0; i < mutation.addedNodes.length; i++) {
-          var newNode = mutation.addedNodes[i];
-          var classList = newNode.classList;
-          if (newNode.nodeName !== 'DIV') {
-            continue;
-          }
-          messengerProcessNode(newNode);
-        }
-      });
-    });
-    target = document.getElementById('u_0_0');
-    observer.observe(target, { attributes: false, childList: true, characterData: false, subtree: true });
+    PageMessenger.init();
   }
 
 })();
